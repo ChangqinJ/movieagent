@@ -1,0 +1,15 @@
+script_planner:
+  class_path: agents.script_planner.ScriptPlanner
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-nano-2025-08-07
+
+
+script_enhancer:
+  class_path: agents.script_enhancer.ScriptEnhancer
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-nano-2025-08-07
+

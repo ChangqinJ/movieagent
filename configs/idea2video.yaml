@@ -1,0 +1,8 @@
+idea2script_pipeline:
+  class_path: pipelines.idea2script_pipeline.Idea2ScriptPipeline
+  config_path: configs/idea2script.yaml
+
+script2video_pipeline:
+  class_path: pipelines.script2video_pipeline.Script2VideoPipeline
+  config_path: configs/script2video.yaml
+

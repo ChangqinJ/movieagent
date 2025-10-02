@@ -1,0 +1,73 @@
+character_extractor:
+  class_path: agents.character_extractor.CharacterExtractor
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+vocal_mapper:
+  class_path: agents.vocal_mapper.VocalMapper
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+
+storyboard_generator:
+  class_path: agents.storyboard_generator.StoryboardGenerator
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+reference_image_selector:
+  class_path: agents.reference_image_selector.ReferenceImageSelector
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+
+image_generator:
+  class_path: tools.image_generator.gemini.GeminiImageGenerator
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai
+    api_version: v1beta
+    model: gemini-2.5-flash-image-preview
+
+# image_generator:
+#   class_path: tools.image_generator.nanobanana.NanoBananaImageGenerator
+#   init_args:
+#     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+#     base_url: https://yunwu.ai
+
+
+best_image_selector:
+  class_path: agents.best_image_selector.BestImageSelector
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+
+video_generator:
+  class_path: tools.video_generator.veo.VeoVideoGenerator
+  init_args:
+    base_url: https://yunwu.ai
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    ff2v_model: veo3-fast-frames   # first frame to video
+    flf2v_model: veo2-fast-frames  # first and last frame to video
+
+
+#video_generator:
+# class_path: tools.video_generator.wan.WanVideoGenerator
+# init_args:
+#   api_key: 9caa641d699a4223b95b7bccebf597c4
+#   ff2v_model: wan2_2-ff2v
+#   flf2v_model: wan2_2-flf2v
+
+# Audio-Video Synchronization Configuration
+multimodal_api_key: "sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB"  # API key for multimodal analysis
+multimodal_auth_token: "sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB"      # Authorization token
+replace_original_videos: true         # Whether to replace original videos with synchronized ones

@@ -1,0 +1,74 @@
+novel_compressor:
+  class_path: agents.novel_compressor.NovelCompressor
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+    chunk_size: 32768
+    chunk_overlap: 8192
+
+event_extractor:
+  class_path: agents.event_extractor.EventExtractor
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+embeddings:
+  class_path: langchain_openai.OpenAIEmbeddings
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    model: text-embedding-3-large
+
+rerank_model:
+  class_path: tools.rerank.silicon.SiliconReranker
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    model: BAAI/bge-reranker-v2-m3
+
+
+scene_extractor:
+  class_path: agents.scene_extractor.SceneExtractor
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+
+global_information_planner:
+  class_path: agents.global_information_planner.GlobalInformationPlanner
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+
+# image_generator:
+#   class_path: tools.image_generator.gemini.GeminiImageGenerator
+#   init_args:
+#     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+#     base_url: https://yunwu.ai
+#     api_version: v1beta
+#     model: gemini-2.5-flash-image-preview
+
+
+image_generator:
+  class_path: tools.image_generator.nanobanana.NanoBananaImageGenerator
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai
+
+rewriter:
+  class_path: agents.rewriter.Rewriter
+  init_args:
+    api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
+    base_url: https://yunwu.ai/v1
+    chat_model: gpt-5-2025-08-07
+
+
+script2video_pipeline:
+  class_path: pipelines.script2video_pipeline.Script2VideoPipeline
+  config_path: configs/script2video.yaml
+
