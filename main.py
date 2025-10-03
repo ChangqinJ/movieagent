@@ -1,36 +1,53 @@
-import asyncio
-from pipelines.novel2movie_pipeline import Novel2MoviePipeline
-from pipelines.script2video_pipeline import Script2VideoPipeline
-import  logging
+from time import sleep
+from main_thread import main_thread, args_of_func
+from concurrent.futures import ThreadPoolExecutor, Future
+import test
+
+def test_func(args:args_of_func):
+  print(args.prompt,"|",args.uuid,"|",args.width,"|",args.height)
+  return 
+
+def test_func2(package:dict[str,any]) -> tuple[int,None|str]:
+  '''
+  package:{'id','task_uuid','prompt','width','height'}
+  '''
+  if not package['prompt']:
+    return package['id'],'prompt is None'
+  else:
+    print(package['id'],"|",package['task_uuid'],"|",package['prompt'],"|",package['width'],"|",package['height'])
+    return package['id'],None
+
+def test_callback(future:Future):
+  print('result:',test.generate_text())
+
+try:
+  mth = main_thread(func=test_func2,base_dir='./base_dir',host='127.0.0.1',port=3306,user='root',password='tkp040629',db='esports')
+except Exception as e:
+  print(e)
+  exit()
+  
+# mth.fetch_status0()
+# if mth.queue.empty():
+#   print('no data')
+#   exit()
+# else:
+# while not mth.queue.empty():
+#   row = mth.queue.get()
+#   print(list(row.values()))
 
 
-logging.basicConfig(level=logging.WARNING)
+mth.run(10,10)
+mth.close()
+print('success')
 
-# novel_path = r"example_inputs\novels\刘慈欣\第07篇《流浪地球》.txt"
-novel_path = r"script.txt"
-style = "Realistic"
-# 可用音色
-vocal_map = {
-
-    "Female1": "en_female_nadia_tips_emo_v2_mars_bigtts",
-    "Female2": "en_female_skye_emo_v2_mars_bigtts",
-    "Male1": "en_male_glen_emo_v2_mars_bigtts",
-    "Male2": "en_male_sylus_emo_v2_mars_bigtts",
-    "Male3": "en_male_corey_emo_v2_mars_bigtts"
-}
-# 可用情感
-emotion_list = ["affectionate", "angry", "chat","excited", "happy", "neutral", "sad", "warm"]
-
-novel_text = open(novel_path, "r", encoding="utf-8").read()
-pipeline = Script2VideoPipeline.init_from_config(
-    config_path="configs/script2video.yaml",
-    working_dir=".working_dir/8",
-)
-
-# Set vocal configuration for the pipeline
-pipeline.vocal_map = vocal_map
-pipeline.emotion_list = emotion_list
-
-asyncio.run(pipeline(novel_text, style=style))
-
-
+# mysql -h testapi.fuhu.tech -P 3306 -u ai_creator -p'ai_creator123456'
+# fut_list = []
+# i = 100
+# with ThreadPoolExecutor(max_workers=10) as executor:
+#   while i > 0:
+#     future = executor.submit(test_func,args_of_func(test.generate_text(),test.generate_text(),1024,1024))
+#     future.add_done_callback(test_callback)
+#     fut_list.append(future)
+#     i -= 1
+# print('success')
+  
