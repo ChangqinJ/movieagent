@@ -12,6 +12,7 @@ def main(package):
         width = package["width"]
         height = package["height"]
         style = "Realistic"
+        id = package["id"]
         os.makedirs(f".working_dir/{task_uuid}", exist_ok=True)
         with open(f".working_dir/{task_uuid}/prompt.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
@@ -43,10 +44,10 @@ def main(package):
 
         # 执行pipeline
         asyncio.run(pipeline(prompt_d, style=style))
-        return (package["id"], "成功生成")
+        return (id, "成功生成")
     except Exception as e:
         logging.error(f"发生异常： {e}")
-        return (package["id"], str(e))
+        return (id, str(e))
     
 if __name__ == "__main__":
     prompt_text = """
