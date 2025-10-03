@@ -24,7 +24,7 @@ emotion_list = ["affectionate", "angry", "chat","excited", "happy", "neutral", "
 novel_text = open(novel_path, "r", encoding="utf-8").read()
 pipeline = Script2VideoPipeline.init_from_config(
     config_path="configs/script2video.yaml",
-    working_dir=".working_dir/7",
+    working_dir=".working_dir/8",
 )
 
 # Set vocal configuration for the pipeline
