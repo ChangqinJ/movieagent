@@ -4,7 +4,7 @@ from pipelines.script2video_pipeline import Script2VideoPipeline
 import  logging 
 import os
 
-def main(package):
+def genVideo(package):
     try:
         logging.basicConfig(level=logging.WARNING)
         prompt = package["prompt"]
@@ -43,12 +43,13 @@ def main(package):
         pipeline.emotion_list = emotion_list
 
         # 执行pipeline
-        asyncio.run(pipeline(prompt_d, style=style))
+        asyncio.run(pipeline(prompt, style=style))
         return (id, "成功生成")
     except Exception as e:
         logging.error(f"发生异常： {e}")
         return (id, str(e))
-    
+
+# 运行示例
 if __name__ == "__main__":
     prompt_text = """
 @ -0,0 +1,188 @@
@@ -87,11 +88,11 @@ if __name__ == "__main__":
     
     package = {
         "prompt": prompt_text,
-        "task_uuid": "12345",
+        "task_uuid": "c124d1a2",
         "width": 1920,
         "height": 1080,
         "id": 2
     }
-    print(main(package)[1])
+    print(genVideo(package)[1])
 
 
