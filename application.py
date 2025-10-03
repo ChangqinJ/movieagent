@@ -43,7 +43,7 @@ def genVideo(package):
         pipeline.emotion_list = emotion_list
 
         # 执行pipeline
-        asyncio.run(pipeline(prompt, style=style))
+        asyncio.run(pipeline(prompt_d, style=style))
         return (id, "成功生成")
     except Exception as e:
         logging.error(f"发生异常： {e}")
