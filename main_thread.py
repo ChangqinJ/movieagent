@@ -138,4 +138,5 @@ class main_thread:
           args = {'id':row['id'],'task_uuid':row['task_uuid'],'prompt':row['prompt'],'width':row['width'],'height':row['height']}
           future = executor.submit(self.func,args)
           future.add_done_callback(main_thread.callback(args,self.dbpool))
+
         print('queue size:',self.queue.qsize()) #测试语句, 正式调试时删除
