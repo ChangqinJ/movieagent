@@ -44,55 +44,9 @@ def genVideo(package):
 
         # 执行pipeline
         asyncio.run(pipeline(prompt_d, style=style))
-        return (id, "成功生成")
+        return (id, None)
     except Exception as e:
         logging.error(f"发生异常： {e}")
         return (id, str(e))
-
-# 运行示例
-if __name__ == "__main__":
-    prompt_text = """
-@ -0,0 +1,188 @@
-# The Midnight Baker
-## A Short Film Script
-
-### CHARACTER DESCRIPTIONS & VOICE NOTES:
-
-**MARK RIVERA** (38) - A graphic designer with a compulsive need to bake perfect sourdough bread
-- Voice: Usually calm and measured, but becomes animated and slightly frantic when discussing fermentation or crust development
-
-**SARAH RIVERA** (36) - Mark's wife, a light sleeper with a low tolerance for 3 AM kitchen noise
-- Voice: Sleepy but sharp, capable of conveying deep disapproval through muffled pillow-talk
-
-### SCENE 1: KITCHEN - 3:15 AM
-
-*Dark apartment kitchen illuminated only by the glow of the oven light. MARK is carefully scoring a proofed loaf. The faint sound of jazz piano plays from his phone. SARAH appears in the doorway, squinting against the light.*
-
-**SARAH:** (muffled by sleep) Mark... are you baking? Again?
-
-**MARK:** (jumping slightly) Shh, the bulk fermentation was perfect today. This is the window.
-
-**SARAH:** (rubbing eyes) It's three AM. The window for normal people is for sleeping.
-
-**FADE OUT.**
-
----
-
-**THE END**
-
-### PRODUCTION NOTES:
-- Locations needed: Apartment kitchen, bedroom doorway, bakery (flashback)
-- Key props: Stand mixer, banneton basket, lame, digital scale, perfectly crusty loaf
-- Tone: Quirky domestic comedy about obsession and compromise
-- Theme: The pursuit of perfection in imperfect circumstances"""
-    
-    package = {
-        "prompt": prompt_text,
-        "task_uuid": "c124d1a2",
-        "width": 1920,
-        "height": 1080,
-        "id": 2
-    }
-    print(genVideo(package)[1])
 
 
