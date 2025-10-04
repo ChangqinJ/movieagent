@@ -1,10 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor, Future
 import pymysql
 from pymysql import cursors
-from pymysql.cursors import Cursor, SSDictCursor
+from pymysql.cursors import Cursor, DictCursor
 from DBpool import DBpool
 from queue import Queue
 import simple_log
+import time
 class args_of_func:
   def __init__(self,id,prompt,uuid,width,height):
     self.prompt = prompt
@@ -35,92 +36,41 @@ class main_thread:
     self.db = db
     self.queue = Queue()
     self.status=True
-    self.dbpool = DBpool(max_connections=10,host=host,port=port,user=user,password=password,db=db)
-    
+    self.dbpool = DBpool(max_connections=10,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
     try:
-      self.SSconn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=SSDictCursor)
+      self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=DictCursor,autocommit=False)
     except pymysql.Error as e:
-      simple_log.log(str(e))
-      raise e
-    try:
-      self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db)
-    except pymysql.Error as e:
-      if self.SSconn.open:
-        self.SSconn.close()
-      simple_log.log(str(e))
-      raise e
-    try:
-      self.cursor = self.conn.cursor()
-    except pymysql.Error as e:
-      if self.conn.open:
-        self.conn.close()
-      if self.SSconn.open:
-        self.SSconn.close()
+      self.dbpool.close()
       simple_log.log(str(e))
       raise e
   
-  # 测试成功, 抓取单批请求放入queue中
   def fetch_status0(self,ub:int=10):
-    '''
-    批量查找数据库中status为0的记录, 并加入queue中, 每次加入的条数存在上限1024
-    将数据库中取出的行中状态改为1
-    '''
+    rows = []
     try:
-      # 先单独取出所有状态为0的行
-      rows = []
-      with self.SSconn.cursor() as SS_cursor:
-        # 此函数产生死锁?
-        SS_cursor.execute('select * from movie_agent_tasks where state = 0 limit %s',(ub,))
-        for row in SS_cursor:
-          rows.append(row)
-      
-      print(f"Found {len(rows)} rows to process") #测试语句, 正式调试时删除
-      
-      # 将取出的行进行修改并全部添加到队列中
-      if rows:
+      Dcursor = self.conn.cursor()
+      self.conn.begin()
+      Dcursor.execute('select u.* from (movie_agent_tasks u join (select id from movie_agent_tasks where state = 0 limit %s) t on u.id = t.id)',(ub,))
+      rows = list(Dcursor.fetchall())
+      if len(rows) > 0:
+        placeholders = ','.join(['%s'] * len(rows))
+        Dcursor.execute(f'update movie_agent_tasks set state = 1 where id in ({placeholders})',tuple(row['id'] for row in rows))
+      else: #测试语句, 正式调试时删除
+        print('no rows to update')
+        time.sleep(5)
+      self.conn.commit()
+      if len(rows) > 0:
         for row in rows:
           self.queue.put(row)
-          print(row['id'],' added to queue') #测试语句, 正式调试时删除
-          self.cursor.execute('update movie_agent_tasks set state = 1 where id = %s',(row['id'],))
-        
-        # 确保事务提交
-        self.conn.commit()
-        print(f"Committed {len(rows)} updates") #测试语句, 正式调试时删除
-      else:
-        print("No rows to process") #测试语句, 正式调试时删除
-        
     except Exception as e:
-      print(f"Error in fetch_status0: {e}")
-      # 如果出错，回滚事务
-      try:
-        self.conn.rollback()
-        print("Transaction rolled back")
-      except:
-        pass
+      self.conn.rollback()
       raise e
-  
+    finally:
+      Dcursor.close()
+      
   #测试成功
   def close(self):
-    try:
-      self.cursor.close()
-    except pymysql.Error as e:
-      simple_log.log(str(e))
-      raise e
-    try:
-      self.SSconn.close()
-    except pymysql.Error as e:
-      simple_log.log(str(e))
-      raise e
-    try:
-      self.conn.close()
-    except pymysql.Error as e:
-      simple_log.log(str(e))
-      raise e
-    try:
-      self.dbpool.close()
-    except Exception as e:
-      simple_log.log(str(e))
-      raise e
+    self.conn.close()
+    self.dbpool.close()
   
   class callback:
     def __init__(self,package:dict[str,any],dbpool:DBpool):
@@ -139,8 +89,8 @@ class main_thread:
         simple_log.log(str(e)+f' task{self.package['id']} execute function failed')
         return
       # 使用一个守护进程查看数据库中的积压未完成任务, 将积压任务设为失败状态
-      index = result[0]
-      msg = result[1]
+      index = result[0] #返回任务id
+      msg = result[1] #返回错误信息, 在没有错误时, 信息为None
       state = None
       if msg is None:
         state = 2
@@ -149,6 +99,7 @@ class main_thread:
       try:
         with conn.cursor() as cursor:
           cursor.execute('update movie_agent_tasks set state = %s where id = %s',(state,index))
+          conn.commit()
       except Exception as e:
         conn.rollback()
         simple_log.log(str(e)+f' task{index} update state failed')
