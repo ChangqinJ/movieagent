@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, Future
+from typing import Callable
 import pymysql
 from pymysql import cursors
 from pymysql.cursors import Cursor, DictCursor
@@ -6,17 +7,10 @@ from DBpool import DBpool
 from queue import Queue
 import simple_log
 import time
-class args_of_func:
-  def __init__(self,id,prompt,uuid,width,height):
-    self.prompt = prompt
-    self.uuid = uuid
-    self.width = width
-    self.height = height
-    self.id = id
 
 class main_thread:
   # 连接测试成功
-  def __init__(self,func,base_dir:str,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=10):
+  def __init__(self,func,base_dir:str,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100):
     '''
     func: 接收'file_path'和'workdir_path'
     base_dir: 基础目录, 用来存放用户文本文档, 每创建一个用户, 就在base_dir下创建一个文件, 文件名称为用户id, 文件内容为用户的prompt
@@ -36,7 +30,7 @@ class main_thread:
     self.db = db
     self.queue = Queue()
     self.status=True
-    self.dbpool = DBpool(max_connections=10,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
+    self.dbpool = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
     try:
       self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=DictCursor,autocommit=False)
     except pymysql.Error as e:
@@ -58,9 +52,12 @@ class main_thread:
         print('no rows to update')
         time.sleep(5)
       self.conn.commit()
+      idlist = []
       if len(rows) > 0:
         for row in rows:
           self.queue.put(row)
+          idlist.append(row['id'])
+        return idlist
     except Exception as e:
       self.conn.rollback()
       raise e
@@ -98,45 +95,84 @@ class main_thread:
         state = 3
       try:
         with conn.cursor() as cursor:
-          cursor.execute('update movie_agent_tasks set state = %s where id = %s',(state,index))
+          cursor.execute('update movie_agent_tasks set state = %s, progress = 100 where id = %s',(state,index))
           conn.commit()
       except Exception as e:
         conn.rollback()
         simple_log.log(str(e)+f' task{index} update state failed')
       self.dbpool.put_connection(conn)
-      
-  def run(self, slice_size:int=1024,max_workers:int=10):
+  
+  def check_future(self,future:Future[tuple[int,None|str]],index:int):
+    while True:
+      time.sleep(5)
+      if future.done():
+        break
+      else:
+        try:
+          conn = self.dbpool.timed_get_connection(timeout=10) 
+          with conn.cursor() as cursor:
+            conn.begin()
+            cursor.execute('select progress from movie_agent_tasks where id = %s for update',(index,))
+            progress = cursor.fetchone()[0] + 1
+            cursor.execute('update movie_agent_tasks set progress = %s where id = %s',(progress,index,))
+            conn.commit()
+            print(f'task{index} update progress success') #测试语句, 正式调试时删除
+        except TimeoutError as e:
+          simple_log.log(str(e)+f' task{index} update progress failed')
+          print(f'task{index} update progress failed') #测试语句, 正式调试时删除
+          continue
+        except Exception as e:
+          conn.rollback()
+          simple_log.log(str(e)+f' task{index} update progress failed')
+          print(f'task{index} update progress failed') #测试语句, 正式调试时删除
+          continue
+        finally:
+          self.dbpool.put_connection(conn)
+  
+  def my_submit(self,executor:ThreadPoolExecutor,func:Callable,args:dict[str,any])->Future[tuple[int,None|str]]:
+    future = executor.submit(func,args)
+    future.add_done_callback(self.callback(args,self.dbpool))
+    #启动新线程, 不断观察future是否已经完成并更新数据库中的progress
+    executor.submit(self.check_future,future,args['id'])
+    return future
+  
+  def run(self, slice_size:int=10,max_workers:int=100):
     '''
     查找数据库中status为0的记录, 每一条记录都开一个线程处理, 线程数不够则等待
     '''
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-      times = 0 #测试语句, 正式调试时删除
-      while True:
-        print('times:',times) #测试语句, 正式调试时删除
-        times += 1 #测试语句, 正式调试时删除
-        if self.status == False:
-          break
-        print('before fetch_status0, times:',times) #测试语句, 正式调试时删除
-        self.fetch_status0(slice_size) #每次获取10条数据, 进行测试, 正式调试传入1024
-        # 在第二次执行到此函数时发生卡顿
-        
-        if self.queue.empty():
-          print('queue is empty, times:',times) #测试语句, 正式调试时删除
-        
-        print('after fetch_status0, times:',times) #测试语句, 正式调试时删除
-        while not self.queue.empty():
-          print('into cycle, times:',times) #测试语句, 正式调试时删除
-          '''
-          对queue中的每一行, 开一个线程处理
-          在处理结束后将queue中的行状态改为2
-          '''
+    try:
+      with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        times = 0 #测试语句, 正式调试时删除
+        while True:
+          print('times:',times) #测试语句, 正式调试时删除
+          times += 1 #测试语句, 正式调试时删除
+          if self.status == False:
+            break
+          print('before fetch_status0, times:',times) #测试语句, 正式调试时删除
+          idlist = self.fetch_status0(slice_size) #每次获取10条数据, 进行测试, 正式调试传入1024
           
-          '''
-          self.func接收参数为字典, 字典内容为{'id','task_uuid','prompt','width','height'}
-          '''
-          row = self.queue.get()
-          args = {'id':row['id'],'task_uuid':row['task_uuid'],'prompt':row['prompt'],'width':row['width'],'height':row['height']}
-          future = executor.submit(self.func,args)
-          future.add_done_callback(main_thread.callback(args,self.dbpool))
-
-        print('queue size:',self.queue.qsize()) #测试语句, 正式调试时删除
+          #捕获数据后, 返回全部行数据的id, 用于更新进度条
+          print('idlist:',idlist) #测试语句, 正式调试时删除
+          if self.queue.empty():
+            print('queue is empty, times:',times) #测试语句, 正式调试时删除
+          
+          print('after fetch_status0, times:',times) #测试语句, 正式调试时删除
+          while not self.queue.empty():
+            print('into cycle, times:',times) #测试语句, 正式调试时删除
+            '''
+            对queue中的每一行, 开一个线程处理
+            在处理结束后将queue中的行状态改为2
+            '''
+            
+            '''
+            self.func接收参数为字典, 字典内容为{'id','task_uuid','prompt','width','height'}
+            '''
+            row = self.queue.get()
+            args = {'id':row['id'],'task_uuid':row['task_uuid'],'prompt':row['prompt'],'width':row['width'],'height':row['height']}
+            # future = executor.submit(self.func,args)
+            # future.add_done_callback(main_thread.callback(args,self.dbpool))
+            future = self.my_submit(executor,self.func,args)
+          print('queue size:',self.queue.qsize()) #测试语句, 正式调试时删除
+    finally:
+      self.close()
+      
