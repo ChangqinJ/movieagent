@@ -36,6 +36,9 @@ class DBpool:
   def get_connection(self):
     return self.pool.get(block=True)
 
+  def timed_get_connection(self,timeout:int=10):
+    return self.pool.get(block=True,timeout=timeout)
+  
   def put_connection(self,conn:Connection):
     self.pool.put(conn)
     
