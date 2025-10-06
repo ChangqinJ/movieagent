@@ -7,13 +7,14 @@ from DBpool import DBpool
 from queue import Queue
 import simple_log
 import time
+import read_config
+import os
 
 class main_thread:
   # 连接测试成功
-  def __init__(self,func,base_dir:str,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100):
+  def __init__(self,func:Callable,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100):
     '''
     func: 接收字典和线程池引用作为参数, 返回tuple[int,None|str]
-    base_dir: 基础目录, 用来存放用户文本文档, 每创建一个用户, 就在base_dir下创建一个文件, 文件名称为用户id, 文件内容为用户的prompt
     host: 数据库主机
     port: 数据库端口
     user: 数据库用户
@@ -22,7 +23,6 @@ class main_thread:
     max_connections: 数据库连接池最大连接数(近似认为是数据库访问的并行程度)
     '''
     self.func = func
-    self.base_dir = base_dir
     self.host = host
     self.port = port
     self.user = user
@@ -102,6 +102,9 @@ class main_thread:
         simple_log.log(str(e)+f' task{index} update state failed')
       self.dbpool.put_connection(conn)
   
+  def add_output_path(self,args:dict[str,any]):
+    pass
+  
   def run(self, slice_size:int=10,max_workers:int=10):
     '''
     查找数据库中status为0的记录, 每一条记录都开一个线程处理, 线程数不够则等待
@@ -135,9 +138,24 @@ class main_thread:
             '''
             row = self.queue.get()
             args = {'id':row['id'],'task_uuid':row['task_uuid'],'prompt':row['prompt'],'width':row['width'],'height':row['height']}
+            self.add_output_path(args)
             future = executor.submit(self.func,args,self.dbpool)
             future.add_done_callback(main_thread.callback(args,self.dbpool))
           print('queue size:',self.queue.qsize()) #测试语句, 正式调试时删除
     finally:
       self.close()
-      
+
+class main_thread_with_config(main_thread):
+  def __init__(self,func:Callable,path_config:str):
+    '''
+    传入config.json文件路径, 读取配置文件, 并初始化main_thread
+    '''
+    self.config = read_config.read_config(path_config)
+    if self.config is None:
+      raise RuntimeError('Failed to load config')
+    super().__init__(func=func,host=self.config['host'],port=self.config['port'],user=self.config['user'],password=self.config['password'],db=self.config['db'],max_connections=self.config['max_connections'])
+    simple_log.default_log_path = self.config['log_path']
+    self.output_path = self.config['output_path']
+  
+  def add_output_path(self,args:dict[str,any]):
+    args['output_path'] = self.output_path

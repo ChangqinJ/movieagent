@@ -1,0 +1,1 @@
+{"host": "testapi.fuhu.tech", "port": 3306, "user": "ai_creator", "password": "ai_creator123456", "db": "esports", "max_connections": 100, "output_path": "./test_output", "log_path": "./logging_dir"}
