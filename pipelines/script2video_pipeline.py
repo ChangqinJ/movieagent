@@ -18,7 +18,19 @@ from tools.video_audio_processor import VideoAudioProcessor
 from components.character import CharacterInScene
 from components.shot import Shot
 
-
+def update_progress(dbpool, id, percent):
+    conn = dbpool.get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute('UPDATE movie_agent_tasks SET progress = %s WHERE id = %s', (percent, id))
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        import logging
+        logging.error(f"更新进度失败: {e}")
+    finally:
+        dbpool.put_connection(conn)
+        
 class Script2VideoPipeline(BasePipeline):
     """
     ----{working_dir}
@@ -47,6 +59,8 @@ class Script2VideoPipeline(BasePipeline):
         script: str,
         style: str,
         character_registry: Optional[Dict[str, List[Dict[str, str]]]] = None,
+        dbpool = None,
+        id = None,
     ):
         """
         Args:
@@ -77,6 +91,8 @@ class Script2VideoPipeline(BasePipeline):
                 style=style,
             )
             end_time_0 = time.time()
+            if dbpool and id:
+                update_progress(dbpool, id, 20)
             print(f"✅ Phase 0 completed in {end_time_0 - start_time_0:.2f} seconds.")
 
 
@@ -88,24 +104,32 @@ class Script2VideoPipeline(BasePipeline):
             character_registry=character_registry,
         )
         end_time_1 = time.time()
+        if dbpool and id:
+            update_progress(dbpool, id, 40)
         print(f"✅ Phase 1 completed in {end_time_1 - start_time_1:.2f} seconds.")
 
         print("⭕ Phase 2: Generate vocal...")
         start_time_2 = time.time()
         await self._generate_shot_vocal()
         end_time_2 = time.time()
+        if dbpool and id:
+            update_progress(dbpool, id, 60)
         print(f"✅ Phase 2 completed in {end_time_2 - start_time_2:.2f} seconds.")
 
         print("⭕ Phase 3: Synchronize audio with video...")
         start_time_3 = time.time()
         await self._synchronize_audio_video()
         end_time_3 = time.time()
+        if dbpool and id:
+            update_progress(dbpool, id, 80)
         print(f"✅ Phase 3 completed in {end_time_3 - start_time_3:.2f} seconds.")
 
         print("⭕ Phase 4: Combine all processed shots into final video...")
         start_time_4 = time.time()
         await self._combine_final_video()
         end_time_4 = time.time()
+        if dbpool and id:
+            update_progress(dbpool, id, 100)
         print(f"✅ Phase 4 completed in {end_time_4 - start_time_4:.2f} seconds.")
 
         print("="*60)

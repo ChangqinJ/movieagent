@@ -4,7 +4,7 @@ from pipelines.script2video_pipeline import Script2VideoPipeline
 import  logging 
 import os
 
-def genVideo(package):
+def genVideo(package, dbpool):
     try:
         logging.basicConfig(level=logging.WARNING)
         prompt = package["prompt"]
@@ -43,7 +43,7 @@ def genVideo(package):
         pipeline.emotion_list = emotion_list
 
         # 执行pipeline
-        asyncio.run(pipeline(prompt_d, style=style))
+        asyncio.run(pipeline(prompt_d, style=style,dbpool=dbpool, id=id))
         return (id, None)
     except Exception as e:
         logging.error(f"发生异常： {e}")
