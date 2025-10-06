@@ -31,7 +31,6 @@ class main_thread:
     self.queue = Queue()
     self.status=True
     self.dbpool = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
-    self.dbpool_for_func = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db)
     try:
       self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=DictCursor,autocommit=False)
     except pymysql.Error as e:
@@ -103,7 +102,7 @@ class main_thread:
         simple_log.log(str(e)+f' task{index} update state failed')
       self.dbpool.put_connection(conn)
   
-  def run(self, slice_size:int=10,max_workers:int=100):
+  def run(self, slice_size:int=10,max_workers:int=10):
     '''
     查找数据库中status为0的记录, 每一条记录都开一个线程处理, 线程数不够则等待
     '''
@@ -136,7 +135,7 @@ class main_thread:
             '''
             row = self.queue.get()
             args = {'id':row['id'],'task_uuid':row['task_uuid'],'prompt':row['prompt'],'width':row['width'],'height':row['height']}
-            future = executor.submit(self.func,args,self.dbpool_for_func)
+            future = executor.submit(self.func,args,self.dbpool)
             future.add_done_callback(main_thread.callback(args,self.dbpool))
           print('queue size:',self.queue.qsize()) #测试语句, 正式调试时删除
     finally:

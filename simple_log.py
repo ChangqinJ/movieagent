@@ -32,4 +32,3 @@ def log(message:str,log_path:str=default_log_path):
   with open(log_path,'a') as f:
     f.write(get_time()+': '+message+'\n')
 
-
