@@ -33,15 +33,19 @@ class DBpool:
         self.pool.get().close()
       raise Exception(f"Failed to create {max_connections} connections")
 
+  # 获取连接
   def get_connection(self):
     return self.pool.get(block=True)
 
+  # 获取连接, 超时时间默认10秒, 超时后抛出TimeoutError
   def timed_get_connection(self,timeout:int=10):
     return self.pool.get(block=True,timeout=timeout)
   
+  # 放回连接
   def put_connection(self,conn:Connection):
     self.pool.put(conn)
     
+  # 关闭连接池
   def close(self):
     while self.pool.empty() == False:
       self.pool.get().close()

@@ -12,7 +12,7 @@ class main_thread:
   # 连接测试成功
   def __init__(self,func,base_dir:str,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100):
     '''
-    func: 接收'file_path'和'workdir_path'
+    func: 接收字典和线程池引用作为参数, 返回tuple[int,None|str]
     base_dir: 基础目录, 用来存放用户文本文档, 每创建一个用户, 就在base_dir下创建一个文件, 文件名称为用户id, 文件内容为用户的prompt
     host: 数据库主机
     port: 数据库端口
@@ -31,6 +31,7 @@ class main_thread:
     self.queue = Queue()
     self.status=True
     self.dbpool = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
+    self.dbpool_for_func = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db)
     try:
       self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=DictCursor,autocommit=False)
     except pymysql.Error as e:
@@ -102,40 +103,6 @@ class main_thread:
         simple_log.log(str(e)+f' task{index} update state failed')
       self.dbpool.put_connection(conn)
   
-  def check_future(self,future:Future[tuple[int,None|str]],index:int):
-    while True:
-      time.sleep(5)
-      if future.done():
-        break
-      else:
-        try:
-          conn = self.dbpool.timed_get_connection(timeout=10) 
-          with conn.cursor() as cursor:
-            conn.begin()
-            cursor.execute('select progress from movie_agent_tasks where id = %s for update',(index,))
-            progress = cursor.fetchone()[0] + 1
-            cursor.execute('update movie_agent_tasks set progress = %s where id = %s',(progress,index,))
-            conn.commit()
-            print(f'task{index} update progress success') #测试语句, 正式调试时删除
-        except TimeoutError as e:
-          simple_log.log(str(e)+f' task{index} update progress failed')
-          print(f'task{index} update progress failed') #测试语句, 正式调试时删除
-          continue
-        except Exception as e:
-          conn.rollback()
-          simple_log.log(str(e)+f' task{index} update progress failed')
-          print(f'task{index} update progress failed') #测试语句, 正式调试时删除
-          continue
-        finally:
-          self.dbpool.put_connection(conn)
-  
-  def my_submit(self,executor:ThreadPoolExecutor,func:Callable,args:dict[str,any])->Future[tuple[int,None|str]]:
-    future = executor.submit(func,args)
-    future.add_done_callback(self.callback(args,self.dbpool))
-    #启动新线程, 不断观察future是否已经完成并更新数据库中的progress
-    executor.submit(self.check_future,future,args['id'])
-    return future
-  
   def run(self, slice_size:int=10,max_workers:int=100):
     '''
     查找数据库中status为0的记录, 每一条记录都开一个线程处理, 线程数不够则等待
@@ -169,9 +136,8 @@ class main_thread:
             '''
             row = self.queue.get()
             args = {'id':row['id'],'task_uuid':row['task_uuid'],'prompt':row['prompt'],'width':row['width'],'height':row['height']}
-            # future = executor.submit(self.func,args)
-            # future.add_done_callback(main_thread.callback(args,self.dbpool))
-            future = self.my_submit(executor,self.func,args)
+            future = executor.submit(self.func,args,self.dbpool_for_func)
+            future.add_done_callback(main_thread.callback(args,self.dbpool))
           print('queue size:',self.queue.qsize()) #测试语句, 正式调试时删除
     finally:
       self.close()
