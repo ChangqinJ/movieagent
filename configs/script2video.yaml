@@ -3,14 +3,14 @@ character_extractor:
   init_args:
     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
     base_url: https://yunwu.ai/v1
-    chat_model: gpt-5-2025-08-07
+    chat_model: gpt-5-chat-latest
 
 vocal_mapper:
   class_path: agents.vocal_mapper.VocalMapper
   init_args:
     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
     base_url: https://yunwu.ai/v1
-    chat_model: gpt-5-2025-08-07
+    chat_model: gpt-5-chat-latest
 
 
 storyboard_generator:
@@ -18,14 +18,14 @@ storyboard_generator:
   init_args:
     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
     base_url: https://yunwu.ai/v1
-    chat_model: gpt-5-2025-08-07
+    chat_model: gpt-5-chat-latest
 
 reference_image_selector:
   class_path: agents.reference_image_selector.ReferenceImageSelector
   init_args:
     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
     base_url: https://yunwu.ai/v1
-    chat_model: gpt-5-2025-08-07
+    chat_model: gpt-5-chat-latest
 
 
 image_generator:
@@ -48,7 +48,7 @@ best_image_selector:
   init_args:
     api_key: sk-RsgJVQohu9e1HBMgdYsy9mQFKs3ue4fZXL2iGMjiiupiViQB
     base_url: https://yunwu.ai/v1
-    chat_model: gpt-5-2025-08-07
+    chat_model: gpt-5-chat-latest
 
 
 video_generator:
