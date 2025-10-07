@@ -1,7 +1,7 @@
 import os
 import time
 
-default_log_path = os.path.join(os.path.dirname(__file__),'base_dir','logging_dir','log.txt')
+default_log_path = os.path.join(os.path.dirname(__file__),'logging_dir','log.txt')
 
 def get_time():
   return time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())

@@ -12,7 +12,7 @@ import os
 
 class main_thread:
   # 连接测试成功
-  def __init__(self,func:Callable,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100):
+  def __init__(self,func:Callable,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100, logging_path:str='./logging_dir'):
     '''
     func: 接收字典和线程池引用作为参数, 返回tuple[int,None|str]
     host: 数据库主机
@@ -31,19 +31,27 @@ class main_thread:
     self.queue = Queue()
     self.status=True
     self.dbpool = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
+    self.logging_path = logging_path
     try:
       self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=DictCursor,autocommit=False)
     except pymysql.Error as e:
       self.dbpool.close()
-      simple_log.log(str(e))
+      simple_log.log(str(e),log_path=self.logging_path)
       raise e
   
+  def init_process(self,max_workers:int=10):
+    pass
+  
   def fetch_status0(self,ub:int=10):
+    '''
+    从数据库中找到特定数量的state=0的记录并添加到queue中, 并更新state为1
+    '''
     rows = []
     try:
       Dcursor = self.conn.cursor()
       self.conn.begin()
-      Dcursor.execute('select u.* from (movie_agent_tasks u join (select id from movie_agent_tasks where state = 0 limit %s) t on u.id = t.id)',(ub,))
+      # 找到全部state=0的记录, 并限制返回数量
+      Dcursor.execute('select * from movie_agent_tasks where state = 0 limit %s',(ub,))
       rows = list(Dcursor.fetchall())
       if len(rows) > 0:
         placeholders = ','.join(['%s'] * len(rows))
@@ -57,7 +65,7 @@ class main_thread:
         for row in rows:
           self.queue.put(row)
           idlist.append(row['id'])
-        return idlist
+      return idlist
     except Exception as e:
       self.conn.rollback()
       raise e
@@ -77,13 +85,14 @@ class main_thread:
       try:
         conn = self.dbpool.get_connection()
       except Exception as e:
-        simple_log.log(str(e)+f' task{self.package['id']} get MySQL connection failed')
+        simple_log.log(str(e)+f' task{self.package['id']} get MySQL connection failed',log_path=self.logging_path)
         return
       
       try:
         result = future.result()
       except Exception as e:
-        simple_log.log(str(e)+f' task{self.package['id']} execute function failed')
+        simple_log.log(str(e)+f' task{self.package['id']} execute function failed',log_path=self.logging_path)
+        self.dbpool.put_connection(conn)
         return
       # 使用一个守护进程查看数据库中的积压未完成任务, 将积压任务设为失败状态
       index = result[0] #返回任务id
@@ -96,11 +105,12 @@ class main_thread:
       try:
         with conn.cursor() as cursor:
           cursor.execute('update movie_agent_tasks set state = %s, progress = 100 where id = %s',(state,index))
-          conn.commit()
+        conn.commit()
       except Exception as e:
         conn.rollback()
-        simple_log.log(str(e)+f' task{index} update state failed')
-      self.dbpool.put_connection(conn)
+        simple_log.log(str(e)+f' task{index} update state failed',log_path=self.logging_path)
+      finally:
+        self.dbpool.put_connection(conn)
   
   def add_output_path(self,args:dict[str,any]):
     pass
@@ -113,6 +123,7 @@ class main_thread:
       with ThreadPoolExecutor(max_workers=max_workers) as executor:
         times = 0 #测试语句, 正式调试时删除
         while True:
+          self.init_process(max_workers=max_workers) #初始化进程, 在最新版本main_thread_cfg_init中, 函数依照is_init值决定是否执行, 并保证在服务器开启后只执行一次
           print('times:',times) #测试语句, 正式调试时删除
           times += 1 #测试语句, 正式调试时删除
           if self.status == False:
@@ -150,12 +161,76 @@ class main_thread_with_config(main_thread):
     '''
     传入config.json文件路径, 读取配置文件, 并初始化main_thread
     '''
+    self.path_config = path_config
     self.config = read_config.read_config(path_config)
     if self.config is None:
       raise RuntimeError('Failed to load config')
-    super().__init__(func=func,host=self.config['host'],port=self.config['port'],user=self.config['user'],password=self.config['password'],db=self.config['db'],max_connections=self.config['max_connections'])
-    simple_log.default_log_path = self.config['log_path']
+    super().__init__(func=func,host=self.config['host'],port=self.config['port'],user=self.config['user'],password=self.config['password'],db=self.config['db'],max_connections=self.config['max_connections'],logging_path=self.config['log_path'])
     self.output_path = self.config['output_path']
-  
+    # 测试语句, 正式调试时删除
+    print('path_config: ',path_config)
+    print('config: ',self.config)
+    
   def add_output_path(self,args:dict[str,any]):
     args['output_path'] = self.output_path
+
+class main_thread_cfg_init(main_thread_with_config):
+  def __init__(self,func:Callable,path_config:str):
+    self.__is_init = True
+    super().__init__(func=func,path_config=path_config)
+  
+  #确实可以在开始时将全部未完成任务状态转回为0, 但是无法保证在run过程中不会出现新的未完成任务
+  def init_process(self,max_workers:int=10):
+    '''
+    在服务器启动时, 只负责将未完成任务的状态转回为0, 接下来交给run处理
+    本函数只在初始状态执行一次
+    '''
+    if self.__is_init == False:
+      return
+    else:
+      print('start init_process')
+      self.__is_init = False
+      conn = self.dbpool.get_connection()
+      try:
+        # 开始事务
+        # 事务的开始应该在游标的获取之前
+        conn.begin()
+        
+        with conn.cursor() as cursor:
+          #测试语句 - 查看更新前的状态
+          test_list = []
+          cursor.execute('select id from movie_agent_tasks where state = 1')
+          test_list = list(cursor.fetchall())
+          print('test_list: (before update)\n',test_list)
+          
+          # 使用更安全的update语句，避免子查询问题
+          # 先获取所有state=1的id
+          cursor.execute('select id from movie_agent_tasks where state = 1')
+          state_1_ids = [row['id'] for row in cursor.fetchall()]
+          
+          # update语句中最好不要嵌套子查询, 否则会报错
+          if state_1_ids:
+            # 使用IN子句进行更新
+            placeholders = ','.join(['%s'] * len(state_1_ids))
+            cursor.execute(f'update movie_agent_tasks set state = 0 where id in ({placeholders})', state_1_ids)
+            affected_rows = cursor.rowcount
+            print(f'update success, affected rows: {affected_rows}')
+          else:
+            print('no rows with state=1 to update')
+          
+          # 提交事务
+          conn.commit()
+          
+          #测试语句 - 查看更新后的状态
+          test_list = []
+          cursor.execute('select id from movie_agent_tasks where state = 1')
+          test_list = list(cursor.fetchall())
+          print('test_list: (after update)\n',test_list)
+          
+      except Exception as e:
+        conn.rollback()
+        print(f'init_process failed: {str(e)}')
+        simple_log.log(str(e)+' init_process failed',log_path=self.logging_path)
+      finally:
+        self.dbpool.put_connection(conn)
+    print('end init_process')

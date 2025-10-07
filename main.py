@@ -1,4 +1,4 @@
-from main_thread import main_thread, main_thread_with_config
+from main_thread import main_thread, main_thread_with_config, main_thread_cfg_init
 from DBpool import DBpool
 
 def test_func_with_dbpool(args:dict[str,any],dbpool:DBpool)->tuple[int,None|str]:
@@ -8,7 +8,15 @@ def test_func_with_dbpool(args:dict[str,any],dbpool:DBpool)->tuple[int,None|str]
     return args['id'],'error'
   return args['id'],None
 
+# if __name__ == '__main__':
+#   # 使用配置文件初始化main_thread
+#   mth = main_thread_with_config(test_func_with_dbpool,path_config='./movie_agent_config.json')
+#   mth.run()
+
 if __name__ == '__main__':
-  # 使用配置文件初始化main_thread
-  mth = main_thread_with_config(test_func_with_dbpool,path_config='./movie_agent_config.json')
+  mth = main_thread_cfg_init(func=test_func_with_dbpool,path_config='./movie_agent_config.json')
   mth.run()
+
+# if __name__ == '__main__':
+#   mth = main_thread_with_config(test_func_with_dbpool,path_config='./movie_agent_config.json')
+#   mth.run()
