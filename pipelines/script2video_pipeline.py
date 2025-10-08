@@ -23,7 +23,7 @@ def update_progress(dbpool, id, percent):
     try:
         with conn.cursor() as cursor:
             cursor.execute('UPDATE movie_agent_tasks SET progress = %s WHERE id = %s', (percent, id))
-            conn.commit()
+        conn.commit()
     except Exception as e:
         conn.rollback()
         import logging
@@ -61,7 +61,11 @@ class Script2VideoPipeline(BasePipeline):
         character_registry: Optional[Dict[str, List[Dict[str, str]]]] = None,
         dbpool = None,
         id = None,
+        op_path: str = None,
     ):
+        import sys
+        print(f"🔍 DEBUG: Current Python version: {sys.version}")
+        print("🔍 DEBUG: Checking event loop status...")
         """
         Args:
             script (str): The input script for video generation.
@@ -78,7 +82,7 @@ class Script2VideoPipeline(BasePipeline):
                 ],
             }
         """
-
+        self.output_path = op_path
         print("="*60)
         print("🎬 STARTING VIDEO GENERATION PIPELINE")
         print("="*60)
@@ -91,45 +95,64 @@ class Script2VideoPipeline(BasePipeline):
                 style=style,
             )
             end_time_0 = time.time()
-            if dbpool and id:
-                update_progress(dbpool, id, 20)
+            # if dbpool and id:
+            #     update_progress(dbpool, id, 20)
             print(f"✅ Phase 0 completed in {end_time_0 - start_time_0:.2f} seconds.")
 
 
 
         print("⭕ Phase 1: Design storyboard, generate frames and generate shots...")
         start_time_1 = time.time()
-        await self._design_storyboard_and_generate_shots(
-            script=script,
-            character_registry=character_registry,
-        )
-        end_time_1 = time.time()
-        if dbpool and id:
-            update_progress(dbpool, id, 40)
-        print(f"✅ Phase 1 completed in {end_time_1 - start_time_1:.2f} seconds.")
+        try:
+            print("🔄 Starting storyboard and shot generation...")
+            await self._design_storyboard_and_generate_shots(
+                script=script,
+                character_registry=character_registry,
+            )
+            print("🔍 DEBUG: Returned from _design_storyboard_and_generate_shots")
+            end_time_1 = time.time()
+            # if dbpool and id:
+            #     update_progress(dbpool, id, 40)
+            print(f"✅ Phase 1 completed in {end_time_1 - start_time_1:.2f} seconds.")
+        except Exception as e:
+            print(f"❌ Error in Phase 1: {str(e)}")
+            logging.exception("Phase 1 error details:")
 
         print("⭕ Phase 2: Generate vocal...")
-        start_time_2 = time.time()
-        await self._generate_shot_vocal()
-        end_time_2 = time.time()
-        if dbpool and id:
-            update_progress(dbpool, id, 60)
+        print("🔍 DEBUG: Starting Phase 2")
+        try:
+            start_time_2 = time.time()
+            # 确保事件循环仍在运行
+            loop = asyncio.get_event_loop()
+            if not loop.is_running():
+                print("⚠️ Warning: Event loop is not running at start of Phase 2")
+                # 尝试重新启动事件循环
+                asyncio.set_event_loop(asyncio.new_event_loop())
+            await asyncio.sleep(0)  # 插入一个检查点
+            await self._generate_shot_vocal()
+            print("🔍 DEBUG: Completed Phase 2 main task")
+            end_time_2 = time.time()
+            # if dbpool and id:
+            #     update_progress(dbpool, id, 60)
+        except Exception as e:
+            print(f"❌ Error in Phase 2: {str(e)}")
+            logging.exception("Phase 2 error details:")
         print(f"✅ Phase 2 completed in {end_time_2 - start_time_2:.2f} seconds.")
 
         print("⭕ Phase 3: Synchronize audio with video...")
         start_time_3 = time.time()
         await self._synchronize_audio_video()
         end_time_3 = time.time()
-        if dbpool and id:
-            update_progress(dbpool, id, 80)
+        # if dbpool and id:
+        #     update_progress(dbpool, id, 80)
         print(f"✅ Phase 3 completed in {end_time_3 - start_time_3:.2f} seconds.")
 
         print("⭕ Phase 4: Combine all processed shots into final video...")
         start_time_4 = time.time()
         await self._combine_final_video()
         end_time_4 = time.time()
-        if dbpool and id:
-            update_progress(dbpool, id, 100)
+        # if dbpool and id:
+        #     update_progress(dbpool, id, 100)
         print(f"✅ Phase 4 completed in {end_time_4 - start_time_4:.2f} seconds.")
 
         print("="*60)
@@ -432,10 +455,12 @@ class Script2VideoPipeline(BasePipeline):
         if video_futures:
             print(f"⏳ Waiting for {len(video_futures)} background video task(s) to complete...")
             wait_start = time.time()
+            completed_count = 0
             for shot_idx, future in video_futures:
                 try:
-                    future.result()
-                    print(f"   ✅ Video task completed for shot {shot_idx}")
+                    future.result(timeout=300)  # 5分钟超时
+                    completed_count += 1
+                    print(f"   ✅ Video task completed for shot {shot_idx} ({completed_count}/{len(video_futures)})")
                 except Exception as e:
                     logging.error(f"Video generation task failed for shot {shot_idx}: {e}")
                     print(f"   ❌ Video task failed for shot {shot_idx}: {str(e)}")
@@ -443,7 +468,21 @@ class Script2VideoPipeline(BasePipeline):
             print(f"✅ All background video tasks completed in {wait_duration:.2f}s")
         else:
             print("📁 All videos already exist, skipping generation")
-        executor.shutdown(wait=True)
+        
+        try:
+            # 使用更安全的关闭方式
+            print("🔄 Initiating thread pool executor shutdown")
+            executor.shutdown(wait=True, cancel_futures=False)  # 等待所有任务完成
+            print("✅ Thread pool executor shutdown completed")
+            
+            print(f"📊 Total shots processed: {len(existing_shots)}")
+            # 不要在这里return，让方法继续执行
+        except Exception as e:
+            print(f"❌ Error during executor shutdown: {str(e)}")
+            # 确保在发生错误时也能关闭执行器
+            executor._threads.clear()
+            # 同样不要在这里return，让方法继续执行
+        print("📈 Continuing with the next phase...")
 
     def _run_video_with_retries(
         self,
@@ -453,12 +492,29 @@ class Script2VideoPipeline(BasePipeline):
         max_attempts: int = 3,
         delay_seconds: float = 5.0,
     ) -> str:
-        """Run video generation with retries. Returns save_path on success, raises on final failure."""
+        """Run video generation with retries in synchronous context."""
         last_error = None
         for attempt in range(1, max_attempts + 1):
             try:
                 logging.info(f"[VideoRetry] Attempt {attempt}/{max_attempts} for {save_path}")
-                video = asyncio.run(self.video_generator.generate_single_video(prompt, frame_paths))
+                
+                # 在同步上下文中运行异步视频生成
+                try:
+                    # 尝试使用 asyncio.run()
+                    video = asyncio.run(self.video_generator.generate_single_video(prompt, frame_paths))
+                except RuntimeError as e:
+                    # 如果已经有运行的事件循环，使用不同的方法
+                    if "asyncio.run() cannot be called from a running event loop" in str(e):
+                        # 在当前线程中创建新的事件循环
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            video = loop.run_until_complete(self.video_generator.generate_single_video(prompt, frame_paths))
+                        finally:
+                            loop.close()
+                    else:
+                        raise
+                
                 video.save(save_path)
                 if os.path.exists(save_path):
                     logging.info(f"[VideoRetry] Success on attempt {attempt} for {save_path}")
@@ -790,9 +846,10 @@ class Script2VideoPipeline(BasePipeline):
             
             # Optionally create a copy in the root directory for easy access
             import shutil
-            root_final_path = "final_movie.mp4"
-            shutil.copy2(final_video_path, root_final_path)
-            print(f"☑️ Copy created in project root: {root_final_path}")
+            #root_final_path = "final_movie.mp4"
+            user_output_path = self.output_path+f"/final_movie.mp4"
+            shutil.copy2(final_video_path, user_output_path)
+            print(f"☑️ Copy created in project root: {user_output_path}")
             
         except Exception as e:
             print(f"❌ Failed to combine final video: {str(e)}")

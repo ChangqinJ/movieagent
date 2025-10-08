@@ -1,6 +1,7 @@
 import asyncio
 from pipelines.novel2movie_pipeline import Novel2MoviePipeline
 from pipelines.script2video_pipeline import Script2VideoPipeline
+from pipelines.idea2video_pipeline import Idea2SVideoPipeline
 import  logging 
 import os
 
@@ -33,8 +34,8 @@ def genVideo(package, dbpool):
         # 可用情感
         emotion_list = ["affectionate", "angry", "chat","excited", "happy", "neutral", "sad", "warm"]
 
-        pipeline = Script2VideoPipeline.init_from_config(
-            config_path="configs/script2video.yaml",
+        pipeline = Idea2SVideoPipeline.init_from_config(
+            config_path="configs/idea2video.yaml",
             working_dir=f".working_dir/{task_uuid}",
         )
 
