@@ -62,6 +62,7 @@ class Script2VideoPipeline(BasePipeline):
         dbpool = None,
         id = None,
         op_path: str = None,
+        task_uuid: str = None
     ):
         import sys
         print(f"🔍 DEBUG: Current Python version: {sys.version}")
@@ -83,6 +84,7 @@ class Script2VideoPipeline(BasePipeline):
             }
         """
         self.output_path = op_path
+        self.task_uuid = task_uuid
         print("="*60)
         print("🎬 STARTING VIDEO GENERATION PIPELINE")
         print("="*60)
@@ -847,8 +849,10 @@ class Script2VideoPipeline(BasePipeline):
             # Optionally create a copy in the root directory for easy access
             import shutil
             #root_final_path = "final_movie.mp4"
-            user_output_path = self.output_path+f"/final_movie.mp4"
+            user_output_path = os.path.join(self.output_path,"final_movie.mp4")
+            top_picture_path = self.working_dir+f"/{self.task_uuid}/shots/0_first_frame.png"
             shutil.copy2(final_video_path, user_output_path)
+            shutil.copy2(top_picture_path, self.output_path)
             print(f"☑️ Copy created in project root: {user_output_path}")
             
         except Exception as e:

@@ -13,9 +13,10 @@ class Idea2SVideoPipeline(BasePipeline):
         dbpool=None,
         id=None,
         op_path=None,
+        task_uuid=None
     ): 
         script = await self.idea2script_pipeline(idea=idea)
-        await self.script2video_pipeline(script=script, style=style, dbpool=dbpool, id=id, op_path=op_path)
+        await self.script2video_pipeline(script=script, style=style, dbpool=dbpool, id=id, op_path=op_path,task_uuid=task_uuid)
 
         pass
 
