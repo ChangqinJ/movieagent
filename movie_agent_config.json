@@ -1,1 +1,1 @@
-{"host": "127.0.0.1", "port": 3306, "user": "root", "password": "tkp040629", "db": "esports", "max_connections": 100, "output_path": "C:/Users/TAN/Desktop/ubuntuServer/Server_thread/test_output", "log_path": "C:/Users/TAN/Desktop/ubuntuServer/Server_thread/logging_dir/log.txt"}
+{"host": "testapi.fuhu.tech", "port": 3306, "user": "ai_creator", "password": "ai_creator123456", "db": "esports", "max_connections": 10, "output_path": "user_output", "log_path": "logging_dir/log.txt"}
