@@ -15,6 +15,7 @@ def genVideo(package, dbpool):
         style = "Realistic"
         id = package["id"]
         os.makedirs(f".working_dir/{task_uuid}", exist_ok=True)
+        output_path = package["output_path"]
         with open(f".working_dir/{task_uuid}/prompt.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
 
@@ -44,7 +45,7 @@ def genVideo(package, dbpool):
         pipeline.emotion_list = emotion_list
 
         # 执行pipeline
-        asyncio.run(pipeline(prompt_d, style=style,dbpool=dbpool, id=id))
+        asyncio.run(pipeline(prompt_d, style=style,dbpool=dbpool, id=id,task_uuid=task_uuid,op_path=output_path))
         return (id, None)
     except Exception as e:
         logging.error(f"发生异常： {e}")
