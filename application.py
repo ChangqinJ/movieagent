@@ -15,7 +15,8 @@ def genVideo(package, dbpool):
         style = "Realistic"
         id = package["id"]
         os.makedirs(f".working_dir/{task_uuid}", exist_ok=True)
-        output_path = package["output_path"]
+        output_path = package["output_path"]+f"/{task_uuid}"
+        os.makedirs(output_path, exist_ok=True)
         with open(f".working_dir/{task_uuid}/prompt.txt", "w", encoding="utf-8") as f:
             f.write(prompt)
 
