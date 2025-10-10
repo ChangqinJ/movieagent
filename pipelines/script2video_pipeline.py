@@ -457,12 +457,10 @@ class Script2VideoPipeline(BasePipeline):
         if video_futures:
             print(f"⏳ Waiting for {len(video_futures)} background video task(s) to complete...")
             wait_start = time.time()
-            completed_count = 0
             for shot_idx, future in video_futures:
                 try:
-                    future.result(timeout=300)  # 5分钟超时
-                    completed_count += 1
-                    print(f"   ✅ Video task completed for shot {shot_idx} ({completed_count}/{len(video_futures)})")
+                    future.result()  
+                    print(f"   ✅ Video task completed for shot {shot_idx} ")
                 except Exception as e:
                     logging.error(f"Video generation task failed for shot {shot_idx}: {e}")
                     print(f"   ❌ Video task failed for shot {shot_idx}: {str(e)}")
@@ -470,21 +468,8 @@ class Script2VideoPipeline(BasePipeline):
             print(f"✅ All background video tasks completed in {wait_duration:.2f}s")
         else:
             print("📁 All videos already exist, skipping generation")
+        executor.shutdown(wait=True)
         
-        try:
-            # 使用更安全的关闭方式
-            print("🔄 Initiating thread pool executor shutdown")
-            executor.shutdown(wait=True, cancel_futures=False)  # 等待所有任务完成
-            print("✅ Thread pool executor shutdown completed")
-            
-            print(f"📊 Total shots processed: {len(existing_shots)}")
-            # 不要在这里return，让方法继续执行
-        except Exception as e:
-            print(f"❌ Error during executor shutdown: {str(e)}")
-            # 确保在发生错误时也能关闭执行器
-            executor._threads.clear()
-            # 同样不要在这里return，让方法继续执行
-        print("📈 Continuing with the next phase...")
 
     def _run_video_with_retries(
         self,
