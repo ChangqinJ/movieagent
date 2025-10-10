@@ -36,8 +36,8 @@ def genVideo(package, dbpool):
         # 可用情感
         emotion_list = ["affectionate", "angry", "chat","excited", "happy", "neutral", "sad", "warm"]
 
-        pipeline = Idea2SVideoPipeline.init_from_config(
-            config_path="configs/idea2video.yaml",
+        pipeline = Script2VideoPipeline.init_from_config(
+            config_path="configs/script2video.yaml",
             working_dir=f".working_dir/{task_uuid}",
         )
 
