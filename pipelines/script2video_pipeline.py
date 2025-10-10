@@ -850,7 +850,7 @@ class Script2VideoPipeline(BasePipeline):
             import shutil
             #root_final_path = "final_movie.mp4"
             user_output_path = os.path.join(self.output_path,"final_movie.mp4")
-            top_picture_path = self.working_dir+f"/{self.task_uuid}/shots/0_first_frame.png"
+            top_picture_path = self.working_dir+f"/shots/0_first_frame.png"
             shutil.copy2(final_video_path, user_output_path)
             shutil.copy2(top_picture_path, self.output_path)
             print(f"☑️ Copy created in project root: {user_output_path}")
