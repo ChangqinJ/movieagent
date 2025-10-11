@@ -10,9 +10,24 @@ import time
 import read_config
 import os
 
+# 在使用游标进行操作时, 添加重试机制, 自定义重试次数(3~5次)
+# 弹出特定异常, 即触发重试, 其他异常不触发重试
+
+def retry(conn:pymysql.Connection,max_retry_times:int=5):
+  status = False
+  for i in range(max_retry_times):
+    try:
+      conn.ping(reconnect=True)
+    except Exception as e:
+      print(f'retry failed, retrying times: {i}')
+      time.sleep(1)
+    else:
+      status = True
+      break
+  return status
 class main_thread:
   # 连接测试成功
-  def __init__(self,func:Callable,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100, logging_path:str='./logging_dir'):
+  def __init__(self,func:Callable,host:str='testapi.fuhu.tech',port:int=3306,user:str='ai_creator',password:str='ai_creator123456',db:str='esports',max_connections:int=100, logging_path:str='./logging_dir', max_retry_times:int=5):
     '''
     func: 接收字典和线程池引用作为参数, 返回tuple[int,None|str]
     host: 数据库主机
@@ -32,6 +47,7 @@ class main_thread:
     self.status=True
     self.dbpool = DBpool(max_connections=max_connections,host=host,port=port,user=user,password=password,db=db,cursorclass='DictCursor')
     self.logging_path = logging_path
+    self.max_retry_times=max_retry_times
     try:
       self.conn = pymysql.connect(host=host,port=port,user=user,password=password,db=db,cursorclass=DictCursor,autocommit=False)
     except pymysql.Error as e:
@@ -51,15 +67,48 @@ class main_thread:
       Dcursor = self.conn.cursor()
       self.conn.begin()
       # 找到全部state=0的记录, 并限制返回数量
-      Dcursor.execute('select * from movie_agent_tasks where state = 0 limit %s',(ub,))
+      sql = 'select * from movie_agent_tasks where state = 0 limit %s'
+      args = (ub,)
+      try:
+        Dcursor.execute(sql,args)
+      except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+        if e.args[0] in (0,2003,2006,2013):
+          retry(self.conn,self.max_retry_times)
+          Dcursor.close()
+          Dcursor = self.conn.cursor()
+          Dcursor.execute(sql,args)
+        else:
+          raise e
+      except Exception as e:
+        raise e
       rows = list(Dcursor.fetchall())
       if len(rows) > 0:
         placeholders = ','.join(['%s'] * len(rows))
-        Dcursor.execute(f'update movie_agent_tasks set state = 1 where id in ({placeholders})',tuple(row['id'] for row in rows))
+        sql = f'update movie_agent_tasks set state = 1 where id in ({placeholders})'
+        args = tuple(row['id'] for row in rows)
+        try:
+          Dcursor.execute(sql,args)
+        except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+          if e.args[0] in (0,2003,2006,2013):
+            retry(self.conn,self.max_retry_times)
+            Dcursor.close()
+            Dcursor = self.conn.cursor()
+            Dcursor.execute(sql,args)
+          else:
+            raise e
+        except Exception as e:
+          raise e
+        
+        try:
+          self.conn.commit()
+        except Exception as e:
+          if self.conn:
+            self.conn.rollback()
+            raise e
+          
       else: #测试语句, 正式调试时删除
         print('no rows to update')
         time.sleep(5)
-      self.conn.commit()
       idlist = []
       if len(rows) > 0:
         for row in rows:
@@ -67,7 +116,6 @@ class main_thread:
           idlist.append(row['id'])
       return idlist
     except Exception as e:
-      self.conn.rollback()
       raise e
     finally:
       Dcursor.close()
@@ -103,8 +151,26 @@ class main_thread:
       else:
         state = 3
       try:
-        with conn.cursor() as cursor:
-          cursor.execute('update movie_agent_tasks set state = %s, progress = 100 where id = %s',(state,index))
+        sql = 'update movie_agent_tasks set state = %s, progress = 100 where id = %s'
+        args = (state,index)
+        
+        cursor = conn.cursor()
+        try:
+          cursor.execute(sql,args)
+        except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+          if e.args[0] in (0,2003,2006,2013):
+            status = retry(conn,self.max_retry_times)
+            cursor.close()
+            if status == True:
+              cursor = conn.cursor()
+              cursor.execute(sql,args)
+              cursor.close()
+            else:
+              conn.close()
+              conn = self.dbpool.get_connection()
+              cursor = conn.cursor()
+              cursor.execute(sql,args)
+              cursor.close()
         conn.commit()
       except Exception as e:
         conn.rollback()
@@ -199,20 +265,69 @@ class main_thread_cfg_init(main_thread_with_config):
         with conn.cursor() as cursor:
           #测试语句 - 查看更新前的状态
           test_list = []
-          cursor.execute('select id from movie_agent_tasks where state = 1')
+          sql = 'select id from movie_agent_tasks where state = 1'
+          try:
+            cursor.execute(sql)
+          except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+            if e.args[0] in (0,2003,2006,2013):
+              status = retry(conn,self.max_retry_times)
+              cursor.close()
+              if status == True:
+                cursor = conn.cursor()
+                cursor.execute(sql)
+              else:
+                conn.close()
+                conn = self.dbpool.get_connection()
+                cursor = conn.cursor()
+                cursor.execute(sql)
+          except Exception as e:
+            raise e
+              
+              
           test_list = list(cursor.fetchall())
           print('test_list: (before update)\n',test_list)
           
           # 使用更安全的update语句，避免子查询问题
           # 先获取所有state=1的id
-          cursor.execute('select id from movie_agent_tasks where state = 1')
+          try:
+            cursor.execute('select id from movie_agent_tasks where state = 1')
+          except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+            if e.args[0] in (0,2003,2006,2013):
+              statue = retry(conn,self.max_retry_times)
+              cursor.close()
+              if status == True:
+                cursor = conn.cursor()
+                cursor.execute(sql)
+              else:
+                conn.close()
+                conn = self.dbpool.get_connection()
+                cursor = conn.cursor()
+                cursor.execute(sql)
+          except Exception as e:
+            raise e
           state_1_ids = [row['id'] for row in cursor.fetchall()]
           
           # update语句中最好不要嵌套子查询, 否则会报错
           if state_1_ids:
             # 使用IN子句进行更新
             placeholders = ','.join(['%s'] * len(state_1_ids))
-            cursor.execute(f'update movie_agent_tasks set state = 0 where id in ({placeholders})', state_1_ids)
+            try:
+              cursor.execute(f'update movie_agent_tasks set state = 0 where id in ({placeholders})', state_1_ids)
+            except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+              if e.args[0] in (0,2003,2006,2013):
+                status = retry(conn,self.max_retry_times)
+                cursor.close()
+                if status == True:
+                  cursor = conn.cursor()
+                  cursor.execute(f'update movie_agent_tasks set state = 0 where id in ({placeholders})', state_1_ids)
+                else:
+                  conn.close()
+                  conn = self.dbpool.get_connection()
+                  cursor = conn.cursor()
+                  cursor.execute(f'update movie_agent_tasks set state = 0 where id in ({placeholders})', state_1_ids)
+            except Exception as e:
+              raise e
+            
             affected_rows = cursor.rowcount
             print(f'update success, affected rows: {affected_rows}')
           else:
@@ -223,7 +338,22 @@ class main_thread_cfg_init(main_thread_with_config):
           
           #测试语句 - 查看更新后的状态
           test_list = []
-          cursor.execute('select id from movie_agent_tasks where state = 1')
+          try:
+            cursor.execute('select id from movie_agent_tasks where state = 1')
+          except (pymysql.err.InterfaceError,pymysql.err.OperationalError) as e:
+            if e.args[0] in (0,2003,2006,2013):
+              status = retry(conn,self.max_retry_times)
+              cursor.close()
+              if status == True:
+                cursor = conn.cursor()
+                cursor.execute('select id from movie_agent_tasks where state = 1')
+              else:
+                conn.close()
+                conn = self.dbpool.get_connection()
+                cursor = conn.cursor()
+                cursor.execute('select id from movie_agent_tasks where state = 1')
+          except Exception as e:
+            raise e
           test_list = list(cursor.fetchall())
           print('test_list: (after update)\n',test_list)
           
