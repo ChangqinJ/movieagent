@@ -12,3 +12,4 @@ wheels/
 .working_dir/
 .trash/
 
+movie_agent_config.json
